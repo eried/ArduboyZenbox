@@ -1,7 +1,8 @@
 #include <Arduboy2.h>
 #include <ArduboyPlaytune.h>
+#include "scores.h"
 #include <Adafruit_PixelDust.h> // For simulation
-#define N_GRAINS    100 // Number of grains of sand
+#define N_GRAINS    90 // Number of grains of sand
 
 Arduboy2 arduboy;
 ArduboyPlaytune tunes(arduboy.audio.enabled);
@@ -19,8 +20,8 @@ void setup()
 
 bool editor_mode = false, just_switched;
 int gravityx = 0, gravityy = 0;
-byte current_x = WIDTH / 4, current_y = HEIGHT / 4, current_pixel = 0;
-const int MAX_PIXELS = 100, MAX_GRAVITY = 3000, GRAVITY_REDUCTION = 2;
+byte current_x = WIDTH / 4, current_y = HEIGHT / 4, current_pixel = 0, b_pressed = 0, current_score = 0, invert_hold = 0;
+const int MAX_PIXELS = 100, MAX_GRAVITY = 3000, GRAVITY_REDUCTION = 2, BACKGROUND_TUNE_SWITCH_HOLD = 20;
 
 void loop() {
   if (!(arduboy.nextFrame()))
@@ -37,8 +38,7 @@ void loop() {
       if (arduboy.pressed(A_BUTTON))
         sand.clear();
     }
-    else
-    {
+    else {
       // Get tone based on sand
       uint8_t     i;
       dimension_t x, y;
@@ -51,8 +51,35 @@ void loop() {
       }
 
       // Play tone
-      tunes.tone(map((xsum / N_GRAINS), 0, WIDTH / 2, 800, 4000), map((ysum / N_GRAINS), 0, HEIGHT / 2, 50, 1000));
+      tunes.tone(map((xsum / N_GRAINS), 0, WIDTH / 2, 800, 4000), map((ysum / N_GRAINS), 0, HEIGHT / 2, 50, 500));
+
+      if (b_pressed < BACKGROUND_TUNE_SWITCH_HOLD)
+        b_pressed++;
+
+      if ( b_pressed >= BACKGROUND_TUNE_SWITCH_HOLD) {
+        b_pressed = 0; // Do not retrigger
+        if (current_score == 0)
+          current_score = map((ysum / N_GRAINS), 0, HEIGHT / 2, 1, total_scores); // Select a score to play
+        else        {
+          current_score = 0; // Stop current score
+          tunes.stopScore();
+        }
+        invert_hold = 5;
+      }
     }
+  else
+    b_pressed = 0;
+
+  // Start background tune
+  if (current_score > 0 && !tunes.playing())
+    tunes.playScore(scores[current_score - 1]);
+
+  if (invert_hold > 0) {
+    arduboy.invert(true);
+    invert_hold--;
+  }
+  else
+    arduboy.invert(false);
 
   if (!editor_mode) { // Modify gravity
     if (arduboy.pressed(LEFT_BUTTON)) gravityx = -MAX_GRAVITY;
