@@ -1,8 +1,10 @@
 #include <Arduboy2.h>
+#include <ArduboyPlaytune.h>
 #include <Adafruit_PixelDust.h> // For simulation
-#define N_GRAINS    110 // Number of grains of sand
+#define N_GRAINS    100 // Number of grains of sand
 
 Arduboy2 arduboy;
+ArduboyPlaytune tunes(arduboy.audio.enabled);
 Adafruit_PixelDust sand(WIDTH / 2, HEIGHT / 2, N_GRAINS, 1, 256, false);
 
 void setup()
@@ -11,6 +13,8 @@ void setup()
   arduboy.setFrameRate(60);
   sand.begin();
   sand.randomize(); // Initialize random sand positions
+  tunes.initChannel(PIN_SPEAKER_1);
+  tunes.initChannel(PIN_SPEAKER_2);
 }
 
 bool editor_mode = false, just_switched;
@@ -22,18 +26,35 @@ void loop() {
   if (!(arduboy.nextFrame()))
     return;
 
-  if (!editor_mode && arduboy.pressed(A_BUTTON)){
+  if (!editor_mode && arduboy.pressed(A_BUTTON)) {
     editor_mode = true;
     just_switched = true;
   }
 
-  if (editor_mode && arduboy.pressed(B_BUTTON)){
-    editor_mode = false;
-    if (arduboy.pressed(A_BUTTON))
-      sand.clear();
-  }
+  if (arduboy.pressed(B_BUTTON))
+    if (editor_mode) {
+      editor_mode = false;
+      if (arduboy.pressed(A_BUTTON))
+        sand.clear();
+    }
+    else
+    {
+      // Get tone based on sand
+      uint8_t     i;
+      dimension_t x, y;
+      uint16_t xsum = 0, ysum = 0;
 
-  if (!editor_mode){ // Modify gravity
+      for (i = 0; i < N_GRAINS; i++) {
+        sand.getPosition(i, &x, &y);
+        xsum += x;
+        ysum += y;
+      }
+
+      // Play tone
+      tunes.tone(map((xsum / N_GRAINS), 0, WIDTH / 2, 800, 4000), map((ysum / N_GRAINS), 0, HEIGHT / 2, 50, 1000));
+    }
+
+  if (!editor_mode) { // Modify gravity
     if (arduboy.pressed(LEFT_BUTTON)) gravityx = -MAX_GRAVITY;
     if (arduboy.pressed(RIGHT_BUTTON)) gravityx = MAX_GRAVITY;
     if (arduboy.pressed(UP_BUTTON)) gravityy = MAX_GRAVITY;
@@ -43,18 +64,18 @@ void loop() {
   sand.iterate(gravityx, -gravityy, 1);
   arduboy.clear();
 
-  if (!editor_mode){ // Return to neutral gravity
+  if (!editor_mode) { // Return to neutral gravity
     gravityx /= GRAVITY_REDUCTION;
     gravityy /= GRAVITY_REDUCTION;
   }
-  else{
+  else {
     // Move cursor
     arduboy.pollButtons();
 
-    if (arduboy.justReleased(LEFT_BUTTON)) current_x= max(0,current_x-1);
-    if (arduboy.justReleased(RIGHT_BUTTON)) current_x= min(WIDTH/2,current_x+1);
-    if (arduboy.justReleased(UP_BUTTON)) current_y= max(0,current_y-1);
-    if (arduboy.justReleased(DOWN_BUTTON)) current_y= min(HEIGHT/2,current_y+1);
+    if (arduboy.justReleased(LEFT_BUTTON)) current_x = max(0, current_x - 1);
+    if (arduboy.justReleased(RIGHT_BUTTON)) current_x = min(WIDTH / 2, current_x + 1);
+    if (arduboy.justReleased(UP_BUTTON)) current_y = max(0, current_y - 1);
+    if (arduboy.justReleased(DOWN_BUTTON)) current_y = min(HEIGHT / 2, current_y + 1);
 
     if (arduboy.justReleased(A_BUTTON))
       if (sand.getPixel(current_x, current_y))
@@ -84,12 +105,15 @@ void loop() {
 
   bool ignore;
   for (byte _x = 0; _x < WIDTH / 2; _x++)
-    for (byte _y = 0; _y < HEIGHT / 2; _y++){
-      if (sand.getPixel(_x, _y)){
+    for (byte _y = 0; _y < HEIGHT / 2; _y++) {
+      if (sand.getPixel(_x, _y)) {
         bool skip = false;
         for (i = 0; i < N_GRAINS; i++) {
           sand.getPosition(i, &x, &y);
-          if (_x == x && _y == y){skip = true; break;}
+          if (_x == x && _y == y) {
+            skip = true;
+            break;
+          }
         }
 
         if (!skip) arduboy.fillRect(_x * 2, _y * 2, 2, 2, WHITE);
