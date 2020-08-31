@@ -13,12 +13,13 @@ void setup()
   arduboy.begin();
   arduboy.setFrameRate(60);
   sand.begin();
+  arduboy.initRandomSeed();
   sand.randomize(); // Initialize random sand positions
   tunes.initChannel(PIN_SPEAKER_1);
   tunes.initChannel(PIN_SPEAKER_2);
 }
 
-bool editor_mode = false, just_switched;
+bool editor_mode = false, is_drawing, first_pixel, pen_color;
 int gravityx = 0, gravityy = 0;
 byte current_x = WIDTH / 4, current_y = HEIGHT / 4, current_pixel = 0, b_pressed = 0, current_score = 0, invert_hold = 0;
 const int MAX_PIXELS = 100, MAX_GRAVITY = 3000, GRAVITY_REDUCTION = 2, BACKGROUND_TUNE_SWITCH_HOLD = 20;
@@ -29,7 +30,8 @@ void loop() {
 
   if (!editor_mode && arduboy.pressed(A_BUTTON)) {
     editor_mode = true;
-    just_switched = true;
+    first_pixel = true;
+    is_drawing = false;
   }
 
   if (arduboy.pressed(B_BUTTON))
@@ -64,7 +66,7 @@ void loop() {
           current_score = 0; // Stop current score
           tunes.stopScore();
         }
-        invert_hold = 5;
+        invert_hold = 7;
       }
     }
   else
@@ -73,13 +75,6 @@ void loop() {
   // Start background tune
   if (current_score > 0 && !tunes.playing())
     tunes.playScore(scores[current_score - 1]);
-
-  if (invert_hold > 0) {
-    arduboy.invert(true);
-    invert_hold--;
-  }
-  else
-    arduboy.invert(false);
 
   if (!editor_mode) { // Modify gravity
     if (arduboy.pressed(LEFT_BUTTON)) gravityx = -MAX_GRAVITY;
@@ -99,18 +94,29 @@ void loop() {
     // Move cursor
     arduboy.pollButtons();
 
-    if (arduboy.justReleased(LEFT_BUTTON)) current_x = max(0, current_x - 1);
-    if (arduboy.justReleased(RIGHT_BUTTON)) current_x = min(WIDTH / 2, current_x + 1);
-    if (arduboy.justReleased(UP_BUTTON)) current_y = max(0, current_y - 1);
-    if (arduboy.justReleased(DOWN_BUTTON)) current_y = min(HEIGHT / 2, current_y + 1);
+    if (arduboy.pressed(LEFT_BUTTON)) current_x = max(0, current_x - 1);
+    if (arduboy.pressed(RIGHT_BUTTON)) current_x = min(WIDTH / 2 -1, current_x + 1);
+    if (arduboy.pressed(UP_BUTTON)) current_y = max(0, current_y - 1);
+    if (arduboy.pressed(DOWN_BUTTON)) current_y = min(HEIGHT / 2 -1, current_y + 1);
 
-    if (arduboy.justReleased(A_BUTTON))
-      if (sand.getPixel(current_x, current_y))
-        sand.clearPixel(current_x, current_y);
-      else if (just_switched)
-        just_switched = false;
-      else
-        sand.setPixel(current_x, current_y);
+    if (is_drawing && arduboy.pressed(A_BUTTON))
+    {
+      if (first_pixel)
+      {
+        pen_color = !sand.getPixel(current_x, current_y); // Check which color should I use for the pen
+        first_pixel = false;
+      }
+
+      if (pen_color) sand.setPixel(current_x, current_y);
+      else sand.clearPixel(current_x, current_y);
+    }
+
+    if (arduboy.notPressed(A_BUTTON))
+    {
+      first_pixel = true;
+      if (!is_drawing)
+        is_drawing = true;
+    }
   }
 
   // Draw sand
@@ -146,5 +152,27 @@ void loop() {
         if (!skip) arduboy.fillRect(_x * 2, _y * 2, 2, 2, WHITE);
       }
     }
+
+  if (invert_hold > 0) {
+    arduboy.invert(true);
+    arduboy.setTextSize(2);
+
+    if (current_score == 0)
+    {
+      arduboy.setCursor(WIDTH / 2 - 15, HEIGHT / 2 - 8);
+      arduboy.print("OFF");
+    }
+    else
+    {
+      arduboy.setCursor(WIDTH / 2 - 10, HEIGHT / 2 - 8);
+      if (current_score < 10)
+        arduboy.print("0");
+      arduboy.print(current_score);
+    }
+    invert_hold--;
+  }
+  else
+    arduboy.invert(false);
+
   arduboy.display();
 }
